@@ -8,7 +8,6 @@ DECISION_PARAMS = (37, 98, 22, 49)
 def bundle_notifications(input_path, output_path, typ='exact'):
 
     # read data
-    # TBD
     df = pd.read_csv(input_path,
                      names=['timestamp', 'user_id', 'friend_id', 'friend_name'],
                      parse_dates=['timestamp']
@@ -17,9 +16,9 @@ def bundle_notifications(input_path, output_path, typ='exact'):
     preproc = preprocessing(df)
 
     if typ == 'exact':
-        final = bundle_exact(df)
+        final = bundle_exact(preproc)
     elif typ == 'predict':
-        final = bundle_predict(df)
+        final = bundle_predict(preproc)
     else:
         "Unknown 'typ' parameter"
 
@@ -28,6 +27,8 @@ def bundle_notifications(input_path, output_path, typ='exact'):
 
 def preprocessing(df):
     df['date'] = df.timestamp.dt.strftime('%Y-%m-%d')
+    df['prev_timestamp'] = df.groupby(['date', 'user_id']).timestamp.shift(1)
+    df.prev_timestamp.fillna(value=df.timestamp, inplace=True)
     df['diff'] = (df.timestamp - df.prev_timestamp).dt.round('min')
     df['diff_m'] = (df.timestamp - df.prev_timestamp).dt.seconds // 60
     return df
