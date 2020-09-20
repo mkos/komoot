@@ -14,14 +14,17 @@ def bundle_notifications(input_path, output_path, typ='exact'):
     preproc = preprocessing(df)
 
     if typ == 'exact':
-        final = bundle_exact(preproc)
+        bundled = bundle_exact(preproc)
     elif typ == 'predict':
-        final = bundle_predict(preproc)
+        bundled = bundle_predict(preproc)
     else:
         "Unknown 'typ' parameter"
 
+    final = postprocessing(bundled)
+
     # write data
     final.to_csv(output_path, header=True, index=False)
+
 
 def preprocessing(df):
     df['date'] = df.timestamp.dt.strftime('%Y-%m-%d')
@@ -30,6 +33,34 @@ def preprocessing(df):
     df['diff'] = (df.timestamp - df.prev_timestamp).dt.round('min')
     df['diff_m'] = (df.timestamp - df.prev_timestamp).dt.seconds // 60
     return df
+
+
+def postprocessing(df):
+
+    def make_message(row):
+        if row['num_friends'] == 1:
+            return '{} went on a tour'.format(row['first_friend_name'])
+        else:
+            return '{} and {} other went on a tour'.format(row['first_friend_name'], row['num_friends'] - 1)
+
+    pre = \
+        (df
+         .sort_values('timestamp')
+         .groupby(['user_id', 'notification_sent'])
+         .agg({'timestamp': ['first', 'count'], 'friend_name': ['nunique', 'first']})
+         .reset_index()
+         )
+
+    pre.columns = ['receiver_id', 'notification_sent', 'timestamp_first_tour', 'tours', 'num_friends',
+                    'first_friend_name']
+
+    final = \
+        (pre
+         .assign(message=pre.apply(make_message, axis=1))
+         .drop(['first_friend_name', 'num_friends'], axis=1)
+         )
+
+    return final
 
 
 def bundle_exact(df):
@@ -47,31 +78,9 @@ def bundle_exact(df):
             next_day = ts + dt.timedelta(days=1)  # send all late evening notification next day
             return dt.datetime(next_day.year, next_day.month, next_day.day, 9, 0, 0)
 
-    def make_message(row):
-        if row['num_friends'] == 1:
-            return '{} went on a tour'.format(row['first_friend_name'])
-        else:
-            return '{} and {} other went on a tour'.format(row['first_friend_name'], row['num_friends'] - 1)
+    df['notification_sent'] = df.timestamp.apply(decision_function)
 
-    pre = \
-        (df
-         .assign(notification_sent=df.timestamp.apply(decision_function))
-         .sort_values('timestamp')
-         .groupby(['user_id', 'notification_sent'])
-         .agg({'timestamp': ['first', 'count'], 'friend_name': 'first', 'friend_name': ['nunique', 'first']})
-         .reset_index()
-         )
-
-    pre.columns = ['receiver_id', 'notification_sent', 'timestamp_first_tour', 'tours', 'num_friends',
-                    'first_friend_name']
-
-    final = \
-        (pre
-         .assign(message=pre.apply(make_message, axis=1))
-         .drop(['first_friend_name', 'num_friends'], axis=1)
-         )
-
-    return final
+    return df
 
 
 def bundle_predict(df):
@@ -97,6 +106,7 @@ def bundle_predict(df):
                 return C
             else:
                 return D
+
 
     def decision_function(row):
         return param_decision_function(row, 37, 98, 22, 49)
