@@ -2,8 +2,6 @@ import fire
 import pandas as pd
 import datetime as dt
 
-# input_path 'https://static-eu-komoot.s3.amazonaws.com/backend/challenge/notifications.csv'
-DECISION_PARAMS = (37, 98, 22, 49)
 
 def bundle_notifications(input_path, output_path, typ='exact'):
 
@@ -101,7 +99,7 @@ def bundle_predict(df):
                 return D
 
     def decision_function(row):
-        param_decision_function(row, *DECISION_PARAMS)
+        return param_decision_function(row, 37, 98, 22, 49)
 
     df['threshold_value'] = df.apply(decision_function, axis=1)
 
